@@ -551,7 +551,12 @@ Hai, sayang! Aku Heartie, userbot-mu yang siap membantu menyebarkan pesan cinta 
    — /list_blacklist — Lihat daftar grup dalam blacklist  
 
 ============================
-6. Info & Lain-lain  
+6. User Allowed
+   — /adduserbutton — Menambahkan daftar user yang diizinkan memakai userbot
+   — /listuser — Menampilkan daftar user yang diizinkan memakai userbot
+
+============================
+7. Info & Lain-lain  
    — /status — Cek masa aktif userbot  
    — /ping — Periksa apakah bot aktif  
    — /log — Tampilkan log aktivitas bot  
@@ -619,8 +624,6 @@ async def callback_handler(event):
             await event.answer("Log dikirim!")
         except FileNotFoundError:
             await event.answer("Log belum tersedia~", alert=True)
-
-from telethon import Button
 
 @client.on(events.NewMessage(pattern='/stats'))
 async def stats_handler(event):
