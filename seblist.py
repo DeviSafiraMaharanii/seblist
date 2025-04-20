@@ -508,10 +508,9 @@ async def reply_to_user(event):
 
 @client.on(events.NewMessage(pattern=r'^/help\b'))
 async def help_cmd(event):
-    if not is_allowed(event):
-      await event.respond("Kamu ngga punya izin, maaf yaaw!")
-      print("Sender ID:", event.sender_id)
-        return  # Biar nggak semua orang bisa lihat panduan rahasia kamu hehe
+    if not await is_allowed(event):
+      return
+  
     teks = """
 ✨💖 PANDUAN USERBOT HEARTIE 💖✨
 
@@ -587,7 +586,7 @@ Selamat mencoba dan semoga hari-harimu penuh cinta! 💗 Kalau masih ada yang bi
 
 @client.on(events.NewMessage(pattern='/info'))
 async def info_handler(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     now = datetime.now()
@@ -619,7 +618,7 @@ async def info_handler(event):
 
 @client.on(events.CallbackQuery)
 async def callback_handler(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     if event.data == b"refresh_stats":
@@ -639,7 +638,7 @@ async def callback_handler(event):
 
 @client.on(events.NewMessage(pattern='/stats'))
 async def stats_handler(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     try:
@@ -677,7 +676,7 @@ async def stats_handler(event):
 
 @client.on(events.CallbackQuery)
 async def callback_handler(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     if event.data == b"refresh_stats":
@@ -693,7 +692,7 @@ async def callback_handler(event):
 
 @client.on(events.NewMessage(pattern=r'/adduserbutton'))
 async def add_user_button(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return await event.reply("❌ Kamu nggak punya izin buat ini, ciyee.")
 
     async for user in client.iter_participants('me'):  # ambil dari Saved Messages (alias kamu)
@@ -709,7 +708,7 @@ async def add_user_button(event):
 
 @client.on(events.CallbackQuery(data=re.compile(rb'add_(\d+)')))
 async def handler_add_button(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return await event.answer("Kamu nggak punya izin!", alert=True)
 
     add_id = int(event.data_match.group(1))
@@ -737,7 +736,7 @@ async def handler_add_button(event):
 
 @client.on(events.NewMessage(pattern=r'/listuser'))
 async def list_users(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     if not ALLOWED_USERS:
@@ -762,7 +761,7 @@ async def list_users(event):
 
 @client.on(events.CallbackQuery(data=re.compile(rb'remove_(\d+)')))
 async def handler_remove_button(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return await event.answer("Kamu nggak punya izin!", alert=True)
 
     remove_id = int(event.data_match.group(1))
@@ -788,7 +787,7 @@ async def handler_remove_button(event):
       
 @client.on(events.CallbackQuery)
 async def callback_handler(event):
-    if not is_allowed(event):
+    if not await is_allowed(event):
         return
 
     if event.data == b"list_users":
