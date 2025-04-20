@@ -42,14 +42,24 @@ ALLOWED_USERS_FILE = "allowed_users.txt"
 
 def load_allowed_users():
     try:
-        with open("allowed_users.txt", "r") as file:
+        with open(ALLOWED_USERS_FILE, "r") as file:
             return [int(line.strip()) for line in file if line.strip()]
     except FileNotFoundError:
         return []
 
 def save_allowed_users():
     with open(ALLOWED_USERS_FILE, "w") as f:
-        f.write("\n".join(map(str, ALLOWED_USERS)))
+        f.write("\n".join(map(str, load_allowed_users())))  # hanya save yg valid
+
+# Gunakan versi async supaya bisa akses get_sender()
+async def is_allowed(event):
+    try:
+        sender = await event.get_sender()
+        allowed_users = load_allowed_users()
+        return sender.id in allowed_users
+    except Exception as e:
+        print(f"[ERROR] Saat memeriksa is_allowed: {e}")
+        return False
 
 HARI_MAPPING = {
     "senin": "monday", "selasa": "tuesday", "rabu": "wednesday",
@@ -496,11 +506,12 @@ async def reply_to_user(event):
         await event.reply("❌ Gagal mengirim balasan ke pengguna. Mungkin user sudah block bot?")
         print(f"[Reply Error] {e}")
 
-@client.on(events.NewMessage(pattern='/help'))
+@client.on(events.NewMessage(pattern=r'^/help\b'))
 async def help_cmd(event):
     if not is_allowed(event):
+      await event.respond("Kamu ngga punya izin, maaf yaaw!")
+      print("Sender ID:", event.sender_id)
         return  # Biar nggak semua orang bisa lihat panduan rahasia kamu hehe
-
     teks = """
 ✨💖 PANDUAN USERBOT HEARTIE 💖✨
 
