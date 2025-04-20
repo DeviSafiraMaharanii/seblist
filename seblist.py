@@ -7,12 +7,13 @@ import logging
 
 from datetime import datetime, timedelta
 from telethon import TelegramClient, events
+from telethon import Button
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from flask import Flask
 
 # === KONFIGURASI TELEGRAM ===
-api_id =  27934642
+api_id = 27934642
 api_hash = 'efdacfb87584aaef469c9044df1bc321'
 client = TelegramClient("user_session", api_id, api_hash)
 
@@ -35,6 +36,18 @@ usage_stats = {}    # key: user_id, value: jumlah pesan yang berhasil dikirim
 start_time = datetime.now()
 TOTAL_SENT_MESSAGES = 0
 JOBS = {}
+ALLOWED_USERS = {1538087933}  # Ganti dengan ID admin awal
+ALLOWED_USERS_FILE = "allowed_users.txt"
+
+def load_allowed_users():
+    if os.path.exists(ALLOWED_USERS_FILE):
+        with open(ALLOWED_USERS_FILE, "r") as f:
+            return set(map(int, f.read().splitlines()))
+    return ALLOWED_USERS
+
+def save_allowed_users():
+    with open(ALLOWED_USERS_FILE, "w") as f:
+        f.write("\n".join(map(str, ALLOWED_USERS)))
 
 HARI_MAPPING = {
     "senin": "monday", "selasa": "tuesday", "rabu": "wednesday",
@@ -45,6 +58,8 @@ def update_usage(user_id, count):
     global TOTAL_SENT_MESSAGES
     usage_stats[user_id] = usage_stats.get(user_id, 0) + count
     TOTAL_SENT_MESSAGES += count
+
+ALLOWED_USERS = load_allowed_users()
 
 # === FUNCTION UNTUK MELAKUKAN FORWARDING PESAN ===
 async def forward_job(user_id, mode, source, message_id_or_text, jumlah_grup, durasi_jam: float, jumlah_pesan, delay_per_group: int = 0):
@@ -353,30 +368,25 @@ async def list_preset(event):
     teks = "💗== Daftar Preset ==\n" + "\n".join(f"- {nama}" for nama in daftar)
     await event.respond(teks)
 
-@client.on(events.NewMessage(pattern=r'^/setdelaygroup (\d+)$', incoming=True))
+@client.on(events.NewMessage(pattern=r'^/setdelaygroup (\d+)$'))
 async def set_delay_group(event):
-    try:
-        user_id = event.sender_id
-        delay = int(event.pattern_match.group(1))
-        delay_per_group_setting[user_id] = delay
-        await event.reply(f"✨💗 Delay antar grup udah diset ke {delay} detik, bubb!")
-    except Exception as e:
-        await event.reply(f"❌ Ups, terjadi error saat menyetel delay: {e}")
+    user_id = event.sender_id
+    delay = int(event.pattern_match.group(1))
+    delay_per_group_setting[user_id] = delay
+    await event.reply(f"✨💗 Delay antar grup udah diset ke {delay} detik, sayang!")
 
-@client.on(events.NewMessage(pattern=r'^/cekdelaygroup$', incoming=True))
+@client.on(events.NewMessage(pattern=r'^/cekdelaygroup$'))
 async def cek_delay_group(event):
     user_id = event.sender_id
     delay = delay_per_group_setting.get(user_id, 0)
-    await event.respond(
-        f"⏱💗 Delay antar grup kamu saat ini: {delay} detik.\n"
-        "Makin rapih makin mantep kirimannya!"
-    )
+    await event.reply(f"⏱💗 Delay antar grup kamu saat ini: {delay} detik.\n"
+                      "Makin rapih makin mantep kirimannya!")
     
-@client.on(events.NewMessage(pattern=r'^/resetdelaygroup$', incoming=True))
+@client.on(events.NewMessage(pattern=r'^/resetdelaygroup$'))
 async def reset_delay_group(event):
     user_id = event.sender_id
     delay_per_group_setting.pop(user_id, None)
-    await event.reply("♻💗 Delay antar grup udah di-reset ke 0 detik, maniiss!\n"
+    await event.reply("♻💗 Delay antar grup udah di-reset ke 0 detik, manis!\n"
                       "Siap ngebut kirim pesan ke semua grup!")
 
 @client.on(events.NewMessage(pattern='/edit_preset'))
@@ -484,8 +494,11 @@ async def reply_to_user(event):
         await event.reply("❌ Gagal mengirim balasan ke pengguna. Mungkin user sudah block bot?")
         print(f"[Reply Error] {e}")
 
-@client.on(events.NewMessage(pattern=r'^/help$', incoming=True))
+@client.on(events.NewMessage(pattern='/help'))
 async def help_cmd(event):
+    if not is_allowed(event):
+        return  # Biar nggak semua orang bisa lihat panduan rahasia kamu hehe
+
     teks = """
 ✨💖 PANDUAN USERBOT HEARTIE 💖✨
 
@@ -494,68 +507,71 @@ Hai, sayang! Aku Heartie, userbot-mu yang siap membantu menyebarkan pesan cinta 
 ============================
 1. /forward  
    Kirim pesan langsung ke grup.  
-   - Mode forward (dari channel):  
+   — Mode forward (dari channel):  
      /forward forward @namachannel jumlah_grup id_pesan jeda detik durasi jam jumlah_pesan_perhari  
      Contoh: /forward forward @usnchannel 50 27 5 3 300  
-   - Mode text (kirim teks langsung):  
+   — Mode text (kirim teks langsung):  
      /forward text "Halo semua!" jumlah_grup jeda detik durasi jam jumlah_pesan_perhari  
      Contoh: /forward text "Halo semua!" 10 5 3 300  
 
 ============================
 2. /scheduleforward  
    Jadwalkan pesan mingguan otomatis.  
-   Format:  
+   — Format:  
    /scheduleforward mode pesan/sumber jumlah_grup durasi jeda jumlah_pesan hari1,day2 jam:menit  
-   Contoh:  
+   — Contoh:  
    /scheduleforward forward @usnchannel 20 2 5 300 senin,jumat 08:00  
    /scheduleforward text "Halo dari bot!" 30 3 5 300 selasa,rabu 10:00  
 
 ============================
 3. Manajemen Preset & Pesan  
-   - /review_pesan — Lihat pesan default  
-   - /ubah_pesan <pesan_baru> — Ubah pesan default  
-   - /simpan_preset <nama> <pesan> — Simpan preset pesan  
-   - /pakai_preset <nama> — Pilih preset sebagai pesan default  
-   - /list_preset — Tampilkan daftar preset  
-   - /edit_preset <nama> <pesan_baru> — Edit preset pesan  
-   - /hapus_preset <nama> — Hapus preset  
+   — /review_pesan — Lihat pesan default  
+   — /ubah_pesan <pesan_baru> — Ubah pesan default  
+   — /simpan_preset <nama> <pesan> — Simpan preset pesan  
+   — /pakai_preset <nama> — Pilih preset sebagai pesan default  
+   — /list_preset — Tampilkan daftar preset  
+   — /edit_preset <nama> <pesan_baru> — Edit preset pesan  
+   — /hapus_preset <nama> — Hapus preset  
 
 ============================
 4. Pengaturan Job Forward & Delay  
-   - /review — Tampilkan jadwal aktif  
-   - /deletejob <id> — Hapus jadwal forward  
-   - /setdelay <detik> — Atur jeda antar batch kirim  
-   - /stopforward — Hentikan semua job forward aktif kamu
-   - /setdelaygroup 5 - Set delay antar grup ke 5 detik (bisa diubah)
-   - /cekdelaygroup - Cek delay antar grup kamu saat ini 
-   - /resetdelaygroup - Reset delay antar grup ke default 
+   — /review — Tampilkan jadwal aktif  
+   — /deletejob <id> — Hapus jadwal forward  
+   — /setdelay <detik> — Atur jeda antar batch kirim  
+   — /stopforward — Hentikan semua job forward aktif kamu
+   — /setdelaygroup 5 — Set delay antar grup ke 5 detik (bisa diubah)
+   — /cekdelaygroup — Cek delay antar grup kamu saat ini 
+   — /resetdelaygroup — Reset delay antar grup ke default 
 
 ============================
 5. Blacklist Grup
-   - /blacklist_add <nama grup> — Tambahkan grup ke blacklist  
-   - /blacklist_remove <nama grup> — Hapus grup dari blacklist  
-   - /list_blacklist — Lihat daftar grup dalam blacklist  
+   — /blacklist_add <nama grup> — Tambahkan grup ke blacklist  
+   — /blacklist_remove <nama grup> — Hapus grup dari blacklist  
+   — /list_blacklist — Lihat daftar grup dalam blacklist  
 
 ============================
 6. Info & Lain-lain  
-   - /status — Cek masa aktif userbot  
-   - /ping — Periksa apakah bot aktif  
-   - /log — Tampilkan log aktivitas bot  
-   - /feedback <pesan> — Kirim feedback ke pengembang  
-   - /stats — Lihat statistik penggunaan forward  
-   - /restart — Restart bot  
+   — /status — Cek masa aktif userbot  
+   — /ping — Periksa apakah bot aktif  
+   — /log — Tampilkan log aktivitas bot  
+   — /feedback <pesan> — Kirim feedback ke pengembang  
+   — /stats — Lihat statistik penggunaan forward  
+   — /restart — Restart bot  
 
 ============================
 ✨ Cara mendapatkan ID pesan channel:  
 Klik kanan bagian kosong (atau tap lama) pada pesan di channel → Salin link.  
 Misal, jika linknya https://t.me/usnchannel/19 maka id pesan adalah 19.
 
-Selamat mencoba dan semoga hari-harimu penuh cinta! 💗 Kalau masih ada yang bingung bisa chat pengembangku (zero) ya!
+Selamat mencoba dan semoga hari-harimu penuh cinta! 💗 Kalau masih ada yang bingung bisa chat pengembangku/kirimkan feedback ya!
 """
     await event.respond(teks)
 
-@client.on(events.NewMessage(pattern=r'^/info$', incoming=True))
+@client.on(events.NewMessage(pattern='/info'))
 async def info_handler(event):
+    if not is_allowed(event):
+        return
+
     now = datetime.now()
     uptime = now - start_time
     hours, remainder = divmod(int(uptime.total_seconds()), 3600)
@@ -564,42 +580,226 @@ async def info_handler(event):
     aktif_sejak = start_time.strftime("%d %B %Y pukul %H:%M WIB")
 
     text = (
-        "💖 Tentang Bot Ini 💖\n\n"
-        "Hai! Aku adalah Heartie Bot — sahabatmu dalam meneruskan pesan otomatis!\n\n"
-        "✨ Dibuat oleh: @explicist\n"
+        "💖 Tentang Heartie Bot 💖\n\n"
+        "Haiii! Aku Heartie, sahabatmu yang selalu setia meneruskan pesan penuh cinta ke grup-grup kesayanganmu~\n\n"
+        "✨ Dibuat oleh: [@explicist](https://t.me/explicist)\n"
         "🛠 Versi: 1.2.0\n"
         "🧠 Ditenagai oleh: Python + Telethon\n"
-        "🎯 Fungsi: Ngebantu kamu meneruskan pesan secara otomatis & terjadwal\n\n"
+        "🎯 Fungsi: Kirim & jadwalkan pesan otomatis ke banyak grup\n\n"
         f"⏳ Uptime: {hours} jam, {minutes} menit\n"
         f"📅 Aktif sejak: {aktif_sejak}\n\n"
-        "Butuh bantuan? Coba ketik /help yaaw!"
+        "Butuh bantuan? Yuk klik tombol di bawah ini~ 💗"
     )
 
-    await event.respond(text, parse_mode='markdown')
+    buttons = [
+        [Button.inline("📖 Panduan /help", data=b"show_help")],
+        [Button.inline("📊 Lihat Statistik", data=b"refresh_stats")],
+        [Button.url("💬 Hubungi Pembuat", url="https://t.me/explicist")]
+    ]
 
-@client.on(events.NewMessage(pattern=r'^/stats$', incoming=True))
+    await event.respond(text, buttons=buttons, parse_mode='markdown')
+
+@client.on(events.CallbackQuery)
+async def callback_handler(event):
+    if not is_allowed(event):
+        return
+
+    if event.data == b"refresh_stats":
+        await stats_handler(event)
+        await event.answer("Statistik diperbarui!")
+
+    elif event.data == b"show_help":
+        await help_cmd(event)
+        await event.answer("Ini panduannya~")
+
+    elif event.data == b"download_log":
+        try:
+            await client.send_file(event.chat_id, 'logs.txt', caption="📄 Ini dia log-nya yaa!")
+            await event.answer("Log dikirim!")
+        except FileNotFoundError:
+            await event.answer("Log belum tersedia~", alert=True)
+
+from telethon import Button
+
+@client.on(events.NewMessage(pattern='/stats'))
 async def stats_handler(event):
+    if not is_allowed(event):
+        return
+
     try:
         global TOTAL_SENT_MESSAGES
 
         sender = await event.get_sender()
         name = sender.first_name or "Pengguna"
         username = f"@{sender.username}" if sender.username else "(tanpa username)"
+        chat_id = event.chat_id
+
+        try:
+            with open('allowed_users.txt', 'r') as f:
+                total_users = len(f.readlines())
+        except FileNotFoundError:
+            total_users = 1
 
         stats_text = (
-            f"💖 Hai {name} ({username})!\n\n"
-            "📊 Statistik Bot:\n"
+            f"💖 Haii {name} ({username})!\n\n"
+            "📊 Statistik Heartie Bot:\n"
             f"• Total job aktif: {len(JOBS)}\n"
             f"• Total pesan terkirim: {TOTAL_SENT_MESSAGES}\n"
-            f"• Waktu server: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"• Total pengguna terdaftar: {total_users}\n"
+            f"• Waktu server sekarang: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        await event.respond(stats_text)
-        TOTAL_SENT_MESSAGES += 1
+        buttons = [
+            [Button.inline("🔄 Refresh", data=b"refresh_stats")],
+            [Button.inline("📥 Download Log", data=b"download_log")]
+        ]
 
+        await event.respond(stats_text, buttons=buttons, parse_mode='markdown')
+        TOTAL_SENT_MESSAGES += 1
     except Exception as e:
-        await event.respond(f"❌ Error: {e}")
+        await event.respond(f"❌ Terjadi kesalahan: {e}")
+
+@client.on(events.CallbackQuery)
+async def callback_handler(event):
+    if not is_allowed(event):
+        return
+
+    if event.data == b"refresh_stats":
+        await stats_handler(event)
+        await event.answer("Diperbarui!")
+
+    elif event.data == b"download_log":
+        try:
+            await client.send_file(event.chat_id, 'logs.txt', caption="📄 Ini dia log-nya yaa!")
+            await event.answer("Log dikirim!")
+        except FileNotFoundError:
+            await event.answer("Log belum tersedia~", alert=True)
+
+@client.on(events.NewMessage(pattern=r'/adduserbutton'))
+async def add_user_button(event):
+    if not is_allowed(event):
+        return await event.reply("❌ Kamu nggak punya izin buat ini, ciyee.")
+
+    async for user in client.iter_participants('me'):  # ambil dari Saved Messages (alias kamu)
+        break  # hanya ambil kamu sendiri
+    keyboard = [
+        [Button.inline("➕ Izinkan Saya Sendiri", data=f"add_{user.id}")]
+    ]
+
+    await event.reply(
+        "💖 Pilih siapa yang mau kamu izinkan jadi pengguna bot ini yaa:",
+        buttons=keyboard
+    )
+
+@client.on(events.CallbackQuery(data=re.compile(rb'add_(\d+)')))
+async def handler_add_button(event):
+    if not is_allowed(event):
+        return await event.answer("Kamu nggak punya izin!", alert=True)
+
+    add_id = int(event.data_match.group(1))
+
+    if add_id in ALLOWED_USERS:
+        return await event.answer("✨ User ini sudah diizinkan sebelumnya kok!", alert=True)
+
+    ALLOWED_USERS.add(add_id)
+    save_allowed_users()
+
+    try:
+        user = await client.get_entity(add_id)
+        nama = user.first_name or "Tanpa Nama"
+        username = f"@{user.username}" if user.username else "(tanpa username)"
+    except Exception:
+        nama = "Tidak diketahui"
+        username = "(tanpa username)"
+
+    await event.edit(
+        f"✨ Yey! User ini sekarang sudah jadi bagian dari Heartie Club!\n\n"
+        f"• Nama: {nama}\n"
+        f"• Username: {username}\n"
+        f"• ID: {add_id}"
+    )
+
+@client.on(events.NewMessage(pattern=r'/listuser'))
+async def list_users(event):
+    if not is_allowed(event):
+        return
+
+    if not ALLOWED_USERS:
+        return await event.reply("💖 Belum ada user yang diizinkan, sayang...")
+
+    teks = "✨ Daftar pengguna yang diizinkan:\n\n"
+    buttons = []
+
+    for uid in sorted(ALLOWED_USERS):
+        try:
+            user = await client.get_entity(uid)
+            nama = user.first_name or "Tanpa Nama"
+            username = f"@{user.username}" if user.username else "(tanpa username)"
+        except Exception:
+            nama = "Tidak diketahui"
+            username = "(tanpa username)"
+
+        teks += f"• {nama} | {username} | {uid}\n"
+        buttons.append(Button.inline(f"❌ Hapus {uid}", data=f"remove_{uid}"))
+
+    await event.reply(teks, buttons=buttons)
+
+@client.on(events.CallbackQuery(data=re.compile(rb'remove_(\d+)')))
+async def handler_remove_button(event):
+    if not is_allowed(event):
+        return await event.answer("Kamu nggak punya izin!", alert=True)
+
+    remove_id = int(event.data_match.group(1))
+
+    if remove_id in ALLOWED_USERS:
+        ALLOWED_USERS.remove(remove_id)
+        save_allowed_users()
+        try:
+            user = await client.get_entity(remove_id)
+            nama = user.first_name or "Tanpa Nama"
+            username = f"@{user.username}" if user.username else "(tanpa username)"
+        except Exception:
+            nama = "Tidak diketahui"
+            username = "(tanpa username)"
+
+        await event.edit(
+            f"❌ {remove_id} telah dihapus dari daftar user yang diizinkan.\n"
+            f"• Nama: {nama}\n"
+            f"• Username: {username}"
+        )
+    else:
+        await event.answer("User sudah tidak ada di daftar!", alert=True)
       
+@client.on(events.CallbackQuery)
+async def callback_handler(event):
+    if not is_allowed(event):
+        return
+
+    if event.data == b"list_users":
+        await list_user(event)
+
+    elif event.data.startswith(b"add_user_"):
+        new_id = int(event.data.decode().split("_")[-1])
+        ALLOWED_USERS.add(new_id)
+        save_allowed_users()
+        await event.edit(f"💖 User ID {new_id} berhasil ditambahkan ke daftar!")
+        await event.answer("Berhasil ditambahkan~")
+
+    elif event.data == b"refresh_stats":
+        await stats_handler(event)
+        await event.answer("Statistik diperbarui!")
+
+    elif event.data == b"show_help":
+        await help_cmd(event)
+        await event.answer("Ini panduannya~")
+
+    elif event.data == b"download_log":
+        try:
+            await client.send_file(event.chat_id, 'logs.txt', caption="📄 Ini dia log-nya yaa!")
+            await event.answer("Log dikirim!")
+        except FileNotFoundError:
+            await event.answer("Log belum tersedia~", alert=True)
+
 # === PENGECEKAN LISENSI ===
 async def cek_lisensi():
     if datetime.now() > MASA_AKTIF:
