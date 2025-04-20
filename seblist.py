@@ -41,10 +41,11 @@ ALLOWED_USERS = {1538087933}  # Ganti dengan ID admin awal
 ALLOWED_USERS_FILE = "allowed_users.txt"
 
 def load_allowed_users():
-    if os.path.exists(ALLOWED_USERS_FILE):
-        with open(ALLOWED_USERS_FILE, "r") as f:
-            return set(map(int, f.read().splitlines()))
-    return ALLOWED_USERS
+    try:
+        with open("allowed_users.txt", "r") as file:
+            return [int(line.strip()) for line in file if line.strip()]
+    except FileNotFoundError:
+        return []
 
 def save_allowed_users():
     with open(ALLOWED_USERS_FILE, "w") as f:
