@@ -568,7 +568,9 @@ async def reply_to_user(event):
 
 @client.on(events.NewMessage(pattern=r'^/help\b'))
 async def help_cmd(event):
-    if not await is_allowed(event):
+    # if not await is_allowed(event):
+    #     return
+    await event.respond("Tes /help bekerja!")
         return
     teks = """
 ✨💖 PANDUAN USERBOT HEARTIE 💖✨
