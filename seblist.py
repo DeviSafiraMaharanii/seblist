@@ -571,7 +571,6 @@ async def help_cmd(event):
     # if not await is_allowed(event):
     #     return
     await event.respond("Tes /help bekerja!")
-        return
     teks = """
 ✨💖 PANDUAN USERBOT HEARTIE 💖✨
 Hai, sayang! Aku Heartie, userbot-mu yang siap membantu menyebarkan pesan cinta ke semua grup-grup favoritmu. Berikut daftar perintah yang bisa kamu gunakan:
